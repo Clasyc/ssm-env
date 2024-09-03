@@ -1,4 +1,4 @@
-module ssm-manager
+module ssm-env
 
 go 1.21
 

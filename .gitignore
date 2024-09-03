@@ -4,8 +4,8 @@
 *.dll
 *.so
 *.dylib
-ssm-manager
-ssm-manager_unix
+ssm-env
+ssm-env_unix
 
 # Test binary, built with `go test -c`
 *.test
