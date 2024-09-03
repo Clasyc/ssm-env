@@ -1,14 +1,14 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"os"
+	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/chzyer/readline"
 	"github.com/manifoldco/promptui"
 )
 
@@ -19,10 +19,15 @@ func main() {
 
 	svc := ssm.New(sess)
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter SSM parameter prefix: ")
-	prefix, _ := reader.ReadString('\n')
-	prefix = strings.TrimSpace(prefix)
+	prompt := promptui.Prompt{
+		Label: "Enter SSM parameter prefix",
+	}
+
+	prefix, err := prompt.Run()
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return
+	}
 
 	// Ensure prefix ends with '/'
 	if !strings.HasSuffix(prefix, "/") {
@@ -36,6 +41,11 @@ func main() {
 			fmt.Printf("Error fetching parameters: %v\n", err)
 			return
 		}
+
+		// Sort parameters alphabetically
+		sort.Slice(params, func(i, j int) bool {
+			return *params[i].Name < *params[j].Name
+		})
 
 		// Display parameters
 		prompt := promptui.Select{
@@ -60,13 +70,33 @@ func main() {
 		paramName = prefix + paramName
 
 		// Get new value
-		fmt.Printf("Current value: %s\n", *params[index].Value) // Dereference the pointer here
-		fmt.Print("Enter new value (or press Enter to cancel): ")
-		newValue, _ := reader.ReadString('\n')
-		newValue = strings.TrimSpace(newValue)
+		currentValue := *params[index].Value
+		fmt.Printf("Current value: %s\n", currentValue)
 
-		if newValue == "" {
-			fmt.Println("Update cancelled.")
+		rl, err := readline.NewEx(&readline.Config{
+			Prompt:          "Enter new value (or press Enter to cancel): ",
+			HistoryFile:     "/tmp/readline.tmp",
+			InterruptPrompt: "^C",
+			EOFPrompt:       "exit",
+		})
+		if err != nil {
+			panic(err)
+		}
+		defer rl.Close()
+
+		newValue, err := rl.ReadlineWithDefault(currentValue)
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				fmt.Println("\nUpdate cancelled.")
+				continue
+			}
+			fmt.Printf("Input failed %v\n", err)
+			return
+		}
+
+		newValue = strings.TrimSpace(newValue)
+		if newValue == "" || newValue == currentValue {
+			fmt.Println("No changes made.")
 			continue
 		}
 
