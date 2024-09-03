@@ -11,12 +11,14 @@ list format makes it easier to understand the full configuration of an applicati
 
 ### macOS
 
-You can install ssm-manager using curl:
+You can install ssm-env using these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/v0.1.2/download/ssm-manager-darwin-amd64 -o ssm-env
-chmod +x ssm-env
-sudo mv ssm-env /usr/local/bin/
+curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.1.2/ssm-manager-v0.1.2-darwin-amd64.tar.gz -o ssm-env.tar.gz
+tar -xzvf ssm-env.tar.gz
+chmod +x ssm-manager
+sudo mv ssm-manager /usr/local/bin/ssm-env
+rm ssm-env.tar.gz
 ```
 
 ### Ubuntu Linux
@@ -24,9 +26,11 @@ sudo mv ssm-env /usr/local/bin/
 For Ubuntu Linux, use these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/v0.1.2/download/ssm-manager-linux-amd64 -o ssm-env
-chmod +x ssm-env
-sudo mv ssm-env /usr/local/bin/
+curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.1.2/ssm-manager-v0.1.2-linux-amd64.tar.gz -o ssm-env.tar.gz
+tar -xzvf ssm-env.tar.gz
+chmod +x ssm-manager
+sudo mv ssm-manager /usr/local/bin/ssm-env
+rm ssm-env.tar.gz
 ```
 
 After installation, you can run the tool by typing `ssm-manager` in your terminal.
