@@ -14,9 +14,9 @@ list format makes it easier to understand the full configuration of an applicati
 You can install ssm-manager using curl:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/latest/download/ssm-manager-darwin-amd64 -o ssm-manager
-chmod +x ssm-manager
-sudo mv ssm-manager /usr/local/bin/
+curl -L https://github.com/Clasyc/ssm-env/releases/v0.1.2/download/ssm-manager-darwin-amd64 -o ssm-env
+chmod +x ssm-env
+sudo mv ssm-env /usr/local/bin/
 ```
 
 ### Ubuntu Linux
@@ -24,9 +24,9 @@ sudo mv ssm-manager /usr/local/bin/
 For Ubuntu Linux, use these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/latest/download/ssm-manager-linux-amd64 -o ssm-manager
-chmod +x ssm-manager
-sudo mv ssm-manager /usr/local/bin/
+curl -L https://github.com/Clasyc/ssm-env/releases/v0.1.2/download/ssm-manager-linux-amd64 -o ssm-env
+chmod +x ssm-env
+sudo mv ssm-env /usr/local/bin/
 ```
 
 After installation, you can run the tool by typing `ssm-manager` in your terminal.
