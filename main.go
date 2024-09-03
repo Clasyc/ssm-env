@@ -15,7 +15,7 @@ import (
 
 func main() {
 	prefixFlag := flag.String("prefix", "", "SSM parameter prefix")
-	quietFlag := flag.Bool("quiet", false, "Run in quiet mode (minimal output)")
+	debugFlag := flag.Bool("debug", false, "Run in debug mode with additional output")
 	flag.Parse()
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
@@ -74,7 +74,7 @@ func main() {
 
 		// Display parameters
 		prompt := promptui.Select{
-			Label: "↑/↓: navigate • enter: select • ctrl+c: quit",
+			Label: promptui.Styler(promptui.FGFaint)("↑/↓: navigate • enter: select • /:search • ctrl+c: quit"),
 			Items: items,
 			Size:  20,
 			Templates: &promptui.SelectTemplates{
@@ -83,7 +83,18 @@ func main() {
 				Inactive: "  {{ . | greyOrNormal }}",
 				Selected: "▶ {{ . | underline }}",
 			},
-			HideHelp: true,
+			HideHelp:  true,
+			CursorPos: 1,
+			Searcher: func(input string, index int) bool {
+				item := items[index]
+				if index == 0 {
+					// Special case for "Create new variable"
+					return strings.Contains(strings.ToLower(item), strings.ToLower(input))
+				}
+				// For actual parameters, search only in the key name
+				keyName := strings.SplitN(item, " = ", 2)[0]
+				return strings.Contains(strings.ToLower(keyName), strings.ToLower(input))
+			},
 		}
 
 		funcMap := promptui.FuncMap
@@ -113,7 +124,7 @@ func main() {
 
 		if index == 0 {
 			// Create new variable
-			err = createNewParameter(svc, prefix, *quietFlag)
+			err = createNewParameter(svc, prefix, *debugFlag)
 			if err != nil {
 				fmt.Printf("Error creating parameter: %v\n", err)
 			}
@@ -126,7 +137,7 @@ func main() {
 
 		// Get new value
 		currentValue := *params[index-1].Value
-		if !*quietFlag {
+		if *debugFlag {
 			fmt.Printf("Current value: %s\n", currentValue)
 		}
 
@@ -144,7 +155,7 @@ func main() {
 		newValue, err := rl.ReadlineWithDefault(currentValue)
 		if err != nil {
 			if err == readline.ErrInterrupt {
-				if !*quietFlag {
+				if *debugFlag {
 					fmt.Println("\nUpdate cancelled.")
 				}
 				continue
@@ -155,7 +166,7 @@ func main() {
 
 		newValue = strings.TrimSpace(newValue)
 		if newValue == "" || newValue == currentValue {
-			if !*quietFlag {
+			if *debugFlag {
 				fmt.Println("No changes made.")
 			}
 			continue
@@ -166,7 +177,7 @@ func main() {
 		if err != nil {
 			fmt.Printf("Error updating parameter: %v\n", err)
 		} else {
-			if !*quietFlag {
+			if *debugFlag {
 				fmt.Println("Parameter updated successfully.")
 			}
 			// Update latestParam

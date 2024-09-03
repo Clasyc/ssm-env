@@ -16,7 +16,7 @@ list format makes it easier to understand the full configuration of an applicati
 You can install ssm-env using these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.3.1/ssm-manager-v0.3.1-darwin-amd64.tar.gz -o ssm-env.tar.gz
+curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.3.2/ssm-manager-v0.3.2-darwin-amd64.tar.gz -o ssm-env.tar.gz
 tar -xzvf ssm-env.tar.gz
 chmod +x ssm-manager
 sudo mv ssm-manager /usr/local/bin/ssm-env
@@ -28,7 +28,7 @@ rm ssm-env.tar.gz
 For Ubuntu Linux, use these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.3.1/ssm-manager-v0.3.1-linux-amd64.tar.gz -o ssm-env.tar.gz
+curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.3.2/ssm-manager-v0.3.2-linux-amd64.tar.gz -o ssm-env.tar.gz
 tar -xzvf ssm-env.tar.gz
 chmod +x ssm-manager
 sudo mv ssm-manager /usr/local/bin/ssm-env
@@ -54,7 +54,7 @@ ssm-env [options]
 ### Options
 
 - `-prefix string`: Specify the SSM parameter prefix (e.g., `/app/test/`)
-- `-quiet`: Run in quiet mode with minimal output
+- `-debug`: Run in debug mode with additional output
 
 ### Examples
 
