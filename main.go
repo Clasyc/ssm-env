@@ -16,6 +16,8 @@ import (
 func main() {
 	prefixFlag := flag.String("prefix", "", "SSM parameter prefix")
 	debugFlag := flag.Bool("debug", false, "Run in debug mode with additional output")
+	secureFlag := flag.Bool("secure", false, "Run in secure mode with masked input, and hidden secret strings")
+
 	flag.Parse()
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
@@ -70,13 +72,14 @@ func main() {
 			return *params[i].Name < *params[j].Name
 		})
 
-		items := append([]string{"Create new variable"}, formatParameters(params)...)
+		items := append([]string{"Create new variable"}, formatParameters(params, *secureFlag)...)
 
 		// Display parameters
 		prompt := promptui.Select{
-			Label: promptui.Styler(promptui.FGFaint)("↑/↓: navigate • enter: select • /:search • ctrl+c: quit"),
-			Items: items,
-			Size:  20,
+			Label:        promptui.Styler(promptui.FGFaint)("↑/↓: navigate • enter: select • /:search • ctrl+c: quit"),
+			Items:        items,
+			Size:         20,
+			HideSelected: !*debugFlag,
 			Templates: &promptui.SelectTemplates{
 				Label:    "{{ . }}",
 				Active:   "▶ {{ . | underline }}",
@@ -135,18 +138,30 @@ func main() {
 		paramName := strings.SplitN(result, " = ", 2)[0]
 		paramName = prefix + paramName
 
-		// Get new value
 		currentValue := *params[index-1].Value
+		if *secureFlag {
+			currentValue = ""
+		}
+
 		if *debugFlag {
-			fmt.Printf("Current value: %s\n", currentValue)
+			if *secureFlag {
+				fmt.Println("Current value: ******")
+			} else {
+				fmt.Printf("Current value: %s\n", currentValue)
+			}
 		}
 
 		rl, err := readline.NewEx(&readline.Config{
-			Prompt:          "Enter new value (or press Enter to cancel): ",
-			HistoryFile:     "/tmp/readline.tmp",
-			InterruptPrompt: "^C",
-			EOFPrompt:       "exit",
+			Prompt:                 "Enter new value (or press Enter to cancel): ",
+			DisableAutoSaveHistory: true,
+			EnableMask:             *secureFlag,
+			MaskRune:               '*',
+			InterruptPrompt:        "^C",
+			EOFPrompt:              "exit",
+			ForceUseInteractive:    true,
+			UniqueEditLine:         !*debugFlag,
 		})
+
 		if err != nil {
 			panic(err)
 		}
@@ -218,11 +233,15 @@ func fetchParameters(svc *ssm.SSM, prefix string) ([]*ssm.Parameter, error) {
 	return parameters, nil
 }
 
-func formatParameters(params []*ssm.Parameter) []string {
+func formatParameters(params []*ssm.Parameter, secure bool) []string {
 	var formatted []string
 	for _, param := range params {
+		value := *param.Value
+		if secure && *param.Type == "SecureString" {
+			value = "******"
+		}
 		name := strings.Split(*param.Name, "/")
-		formatted = append(formatted, fmt.Sprintf("%s = %s", name[len(name)-1], *param.Value))
+		formatted = append(formatted, fmt.Sprintf("%s = %s", name[len(name)-1], value))
 	}
 	return formatted
 }

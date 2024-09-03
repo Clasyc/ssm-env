@@ -16,7 +16,7 @@ list format makes it easier to understand the full configuration of an applicati
 You can install `ssm-env` using these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.3.2/ssm-env-v0.3.2-darwin-amd64.tar.gz -o ssm-env.tar.gz
+curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.4.0/ssm-env-v0.4.0-darwin-amd64.tar.gz -o ssm-env.tar.gz
 tar -xzvf ssm-env.tar.gz
 chmod +x ssm-env
 sudo mv ssm-env /usr/local/bin/ssm-env
@@ -28,7 +28,7 @@ rm ssm-env.tar.gz
 For Ubuntu Linux, use these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.3.2/ssm-env-v0.3.2-linux-amd64.tar.gz -o ssm-env.tar.gz
+curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.4.0/ssm-env-v0.4.0-linux-amd64.tar.gz -o ssm-env.tar.gz
 tar -xzvf ssm-env.tar.gz
 chmod +x ssm-env
 sudo mv ssm-env /usr/local/bin/ssm-env
@@ -56,6 +56,7 @@ ssm-env [options]
 
 - `-prefix string`: Specify the SSM parameter prefix (e.g., `/app/test/`)
 - `-debug`: Run in debug mode with additional output
+- `-secure`: Use secure mode to hide sensitive values (SSM SecureString)
 
 ### Examples
 
