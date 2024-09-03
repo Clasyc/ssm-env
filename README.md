@@ -33,7 +33,7 @@ sudo mv ssm-manager /usr/local/bin/ssm-env
 rm ssm-env.tar.gz
 ```
 
-After installation, you can run the tool by typing `ssm-manager` in your terminal.
+After installation, you can run the tool by typing `ssm-env` in your terminal.
 
 ### Local build
 
