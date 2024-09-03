@@ -24,10 +24,12 @@ type SSMManager struct {
 	svc         *ssm.SSM
 	prefix      string
 	latestParam *ssm.Parameter
+	quiet       bool
 }
 
 func main() {
 	prefixFlag := flag.String("prefix", "", "SSM parameter prefix")
+	quietFlag := flag.Bool("quiet", true, "Run in quiet mode (minimal output)")
 	flag.Parse()
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
@@ -35,7 +37,8 @@ func main() {
 	}))
 
 	manager := &SSMManager{
-		svc: ssm.New(sess),
+		svc:   ssm.New(sess),
+		quiet: *quietFlag,
 	}
 
 	manager.prefix = manager.getPrefix(*prefixFlag)
@@ -49,6 +52,7 @@ func main() {
 		}
 	}
 }
+
 func (m *SSMManager) run() error {
 	params, err := m.fetchParameters()
 	if err != nil {
@@ -62,7 +66,9 @@ func (m *SSMManager) run() error {
 
 	switch action {
 	case "quit":
-		fmt.Println("Exiting...")
+		if !m.quiet {
+			fmt.Println("Exiting...")
+		}
 		return fmt.Errorf("user quit")
 	case "create":
 		return m.createNewParameter()
@@ -210,7 +216,9 @@ func (m *SSMManager) createNewParameter() error {
 		return fmt.Errorf("failed to create parameter: %w", err)
 	}
 
-	fmt.Println("Parameter created successfully.")
+	if !m.quiet {
+		fmt.Println("Parameter created successfully.")
+	}
 	return nil
 }
 
@@ -230,8 +238,10 @@ func (m *SSMManager) updateParameter(params []*ssm.Parameter, selection string) 
 		return fmt.Errorf("parameter not found: %s", fullName)
 	}
 
-	fmt.Printf("Updating parameter: %s\n", fullName)
-	fmt.Printf("Current value: %s\n", *param.Value)
+	if !m.quiet {
+		fmt.Printf("Updating parameter: %s\n", fullName)
+		fmt.Printf("Current value: %s\n", *param.Value)
+	}
 
 	newValue, err := m.promptForNewValue(*param.Value)
 	if err != nil {
@@ -239,7 +249,9 @@ func (m *SSMManager) updateParameter(params []*ssm.Parameter, selection string) 
 	}
 
 	if newValue == *param.Value {
-		fmt.Println("No changes made.")
+		if !m.quiet {
+			fmt.Println("No changes made.")
+		}
 		return nil
 	}
 
@@ -248,9 +260,10 @@ func (m *SSMManager) updateParameter(params []*ssm.Parameter, selection string) 
 		return fmt.Errorf("error updating parameter: %w", err)
 	}
 
-	fmt.Println("Parameter updated successfully.")
+	if !m.quiet {
+		fmt.Println("Parameter updated successfully.")
+	}
 
-	// Update latestParam
 	m.latestParam = &ssm.Parameter{
 		Name:  aws.String(fullName),
 		Value: aws.String(newValue),
@@ -279,8 +292,15 @@ func (m *SSMManager) promptForParamType() (string, error) {
 }
 
 func (m *SSMManager) promptForNewValue(currentValue string) (string, error) {
+	var prompt string
+	if m.quiet {
+		prompt = "New value: "
+	} else {
+		prompt = "Enter new value (or press Enter to cancel): "
+	}
+
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          "Enter new value (or press Enter to cancel): ",
+		Prompt:          prompt,
 		HistoryFile:     "/tmp/readline.tmp",
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
