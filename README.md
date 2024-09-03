@@ -16,7 +16,8 @@ list format makes it easier to understand the full configuration of an applicati
 You can install ssm-env using these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.2.0/ssm-manager-v0.2.0-darwin-amd64.tar.gz -o ssm-env.tar.gz
+curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.3.0/ssm-manager-v0.3.0-darwin-amd64.tar.gz -o ssm-env.
+tar.gz
 tar -xzvf ssm-env.tar.gz
 chmod +x ssm-manager
 sudo mv ssm-manager /usr/local/bin/ssm-env
@@ -28,7 +29,8 @@ rm ssm-env.tar.gz
 For Ubuntu Linux, use these commands:
 
 ```bash
-curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.2.0/ssm-manager-v0.2.0-linux-amd64.tar.gz -o ssm-env.tar.gz
+curl -L https://github.com/Clasyc/ssm-env/releases/download/v0.3.0/ssm-manager-v0.3.0-linux-amd64.tar.gz -o ssm-env.
+tar.gz
 tar -xzvf ssm-env.tar.gz
 chmod +x ssm-manager
 sudo mv ssm-manager /usr/local/bin/ssm-env
@@ -42,6 +44,43 @@ After installation, you can run the tool by typing `ssm-env` in your terminal.
 SSM Manager uses the default AWS profile configuration on your system. Ensure that you have configured your AWS credentials properly. You can do this by setting the `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION` environment variables, or by using the AWS CLI command `aws configure` to set your credentials.
 
 For more information on how to configure your AWS credentials, you can refer to the [AWS CLI User Guide](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html).
+
+## Usage
+
+SSM Manager can be run with the following options:
+
+```bash
+ssm-env [options]
+```
+
+### Options
+
+- `-prefix string`: Specify the SSM parameter prefix (e.g., `/app/test/`)
+- `-quiet`: Run in quiet mode with minimal output
+
+### Examples
+
+1. Run SSM Manager interactively:
+   ```bash
+   ssm-env
+   ```
+
+2. Run SSM Manager with a specific prefix:
+   ```bash
+   ssm-env -prefix /app/test/
+   ```
+
+3. Run SSM Manager in quiet mode:
+   ```bash
+   ssm-env -quiet
+   ```
+
+4. Run SSM Manager with a specific prefix in quiet mode:
+   ```bash
+   ssm-env -prefix /app/test/ -quiet
+   ```
+
+In quiet mode, the tool provides a minimal interface with reduced output, making it suitable for scripting or when a cleaner display is preferred.
 
 ## Local build
 
