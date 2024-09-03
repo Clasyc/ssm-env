@@ -3,10 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -15,105 +13,185 @@ import (
 	"github.com/manifoldco/promptui"
 )
 
-const (
-	maxRetries = 5
-	retryDelay = 200 * time.Millisecond
-)
-
-type SSMManager struct {
-	svc         *ssm.SSM
-	prefix      string
-	latestParam *ssm.Parameter
-	quiet       bool
-}
-
 func main() {
 	prefixFlag := flag.String("prefix", "", "SSM parameter prefix")
-	quietFlag := flag.Bool("quiet", true, "Run in quiet mode (minimal output)")
+	quietFlag := flag.Bool("quiet", false, "Run in quiet mode (minimal output)")
 	flag.Parse()
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 
-	manager := &SSMManager{
-		svc:   ssm.New(sess),
-		quiet: *quietFlag,
+	svc := ssm.New(sess)
+
+	var prefix string
+	if *prefixFlag != "" {
+		prefix = *prefixFlag
+	} else {
+		prompt := promptui.Prompt{
+			Label: "Enter SSM parameter prefix",
+		}
+
+		var err error
+		prefix, err = prompt.Run()
+		if err != nil {
+			fmt.Printf("Prompt failed %v\n", err)
+			return
+		}
 	}
 
-	manager.prefix = manager.getPrefix(*prefixFlag)
+	// Ensure prefix ends with '/'
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	var latestParam *ssm.Parameter
 
 	for {
-		if err := manager.run(); err != nil {
-			if err.Error() == "user quit" {
+		// Fetch parameters
+		params, err := fetchParameters(svc, prefix)
+		if err != nil {
+			fmt.Printf("Error fetching parameters: %v\n", err)
+			return
+		}
+
+		// Update parameters with the latest param if it exists
+		if latestParam != nil {
+			for i, param := range params {
+				if *param.Name == *latestParam.Name {
+					params[i] = latestParam
+					break
+				}
+			}
+		}
+
+		// Sort parameters alphabetically
+		sort.Slice(params, func(i, j int) bool {
+			return *params[i].Name < *params[j].Name
+		})
+
+		items := append([]string{"Create new variable"}, formatParameters(params)...)
+
+		// Display parameters
+		prompt := promptui.Select{
+			Label: "↑/↓: navigate • enter: select • ctrl+c: quit",
+			Items: items,
+			Size:  20,
+			Templates: &promptui.SelectTemplates{
+				Label:    "{{ . }}",
+				Active:   "▶ {{ . | underline }}",
+				Inactive: "  {{ . | greyOrNormal }}",
+				Selected: "▶ {{ . | underline }}",
+			},
+			HideHelp: true,
+		}
+
+		funcMap := promptui.FuncMap
+		funcMap["greyOrNormal"] = func(s string) string {
+			if s == "Create new variable" {
+				return promptui.Styler(promptui.FGBold)(s)
+			}
+
+			return promptui.Styler(promptui.FGYellow)(s)
+		}
+		funcMap["underline"] = func(s string) string {
+			return promptui.Styler(promptui.FGUnderline)(s)
+		}
+
+		prompt.Templates.FuncMap = funcMap
+
+		index, result, err := prompt.Run()
+
+		if err != nil {
+			if err == promptui.ErrInterrupt {
+				fmt.Println("\nQuitting...")
 				return
 			}
-			log.Printf("Error: %v", err)
+			fmt.Printf("Prompt failed %v\n", err)
+			return
+		}
+
+		if index == 0 {
+			// Create new variable
+			err = createNewParameter(svc, prefix, *quietFlag)
+			if err != nil {
+				fmt.Printf("Error creating parameter: %v\n", err)
+			}
+			continue
+		}
+
+		// Extract parameter name from result
+		paramName := strings.SplitN(result, " = ", 2)[0]
+		paramName = prefix + paramName
+
+		// Get new value
+		currentValue := *params[index-1].Value
+		if !*quietFlag {
+			fmt.Printf("Current value: %s\n", currentValue)
+		}
+
+		rl, err := readline.NewEx(&readline.Config{
+			Prompt:          "Enter new value (or press Enter to cancel): ",
+			HistoryFile:     "/tmp/readline.tmp",
+			InterruptPrompt: "^C",
+			EOFPrompt:       "exit",
+		})
+		if err != nil {
+			panic(err)
+		}
+		defer rl.Close()
+
+		newValue, err := rl.ReadlineWithDefault(currentValue)
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				if !*quietFlag {
+					fmt.Println("\nUpdate cancelled.")
+				}
+				continue
+			}
+			fmt.Printf("Input failed %v\n", err)
+			return
+		}
+
+		newValue = strings.TrimSpace(newValue)
+		if newValue == "" || newValue == currentValue {
+			if !*quietFlag {
+				fmt.Println("No changes made.")
+			}
+			continue
+		}
+
+		// Update parameter
+		err = updateParameter(svc, paramName, newValue, *params[index-1].Type)
+		if err != nil {
+			fmt.Printf("Error updating parameter: %v\n", err)
+		} else {
+			if !*quietFlag {
+				fmt.Println("Parameter updated successfully.")
+			}
+			// Update latestParam
+			latestParam = &ssm.Parameter{
+				Name:  aws.String(paramName),
+				Value: aws.String(newValue),
+				Type:  params[index-1].Type,
+			}
 		}
 	}
 }
 
-func (m *SSMManager) run() error {
-	params, err := m.fetchParameters()
-	if err != nil {
-		return fmt.Errorf("error fetching parameters: %w", err)
-	}
-
-	action, err := m.promptForAction(params)
-	if err != nil {
-		return fmt.Errorf("error prompting for action: %w", err)
-	}
-
-	switch action {
-	case "quit":
-		if !m.quiet {
-			fmt.Println("Exiting...")
-		}
-		return fmt.Errorf("user quit")
-	case "create":
-		return m.createNewParameter()
-	default:
-		return m.updateParameter(params, action)
-	}
-}
-
-func (m *SSMManager) getPrefix(flagValue string) string {
-	if flagValue != "" {
-		return ensureTrailingSlash(flagValue)
-	}
-
-	prompt := promptui.Prompt{
-		Label: "Enter SSM parameter prefix",
-	}
-
-	result, err := prompt.Run()
-	if err != nil {
-		log.Fatalf("Prompt failed: %v", err)
-	}
-
-	return ensureTrailingSlash(result)
-}
-
-func ensureTrailingSlash(s string) string {
-	if !strings.HasSuffix(s, "/") {
-		return s + "/"
-	}
-	return s
-}
-
-func (m *SSMManager) fetchParameters() ([]*ssm.Parameter, error) {
+func fetchParameters(svc *ssm.SSM, prefix string) ([]*ssm.Parameter, error) {
 	var parameters []*ssm.Parameter
 	var nextToken *string
 
 	for {
 		input := &ssm.GetParametersByPathInput{
-			Path:           aws.String(m.prefix),
+			Path:           aws.String(prefix),
 			Recursive:      aws.Bool(false),
 			WithDecryption: aws.Bool(true),
 			NextToken:      nextToken,
 		}
 
-		result, err := m.svc.GetParametersByPath(input)
+		result, err := svc.GetParametersByPath(input)
 		if err != nil {
 			return nil, err
 		}
@@ -126,213 +204,72 @@ func (m *SSMManager) fetchParameters() ([]*ssm.Parameter, error) {
 		nextToken = result.NextToken
 	}
 
-	// Update parameters with the latest param if it exists
-	if m.latestParam != nil {
-		for i, param := range parameters {
-			if *param.Name == *m.latestParam.Name {
-				parameters[i] = m.latestParam
-				break
-			}
-		}
-	}
-
-	sort.Slice(parameters, func(i, j int) bool {
-		return *parameters[i].Name < *parameters[j].Name
-	})
-
 	return parameters, nil
 }
 
-func (m *SSMManager) promptForAction(params []*ssm.Parameter) (string, error) {
-	var items []string
-	if len(params) == 0 {
-		items = []string{
-			"Create new variable",
-			"Quit",
-		}
-	} else {
-		items = append([]string{"Create new variable"}, m.formatParameters(params)...)
-		items = append(items, "Quit")
-	}
-
-	prompt := promptui.Select{
-		Label: "↑/↓: navigate • enter: select • ctrl+c: quit",
-		Items: items,
-		Size:  20,
-		Templates: &promptui.SelectTemplates{
-			Label:    "{{ . }}",
-			Active:   "\u25B6 {{ . | cyan }}",
-			Inactive: "  {{ . }}",
-			Selected: "\u25B6 {{ . | cyan }}",
-		},
-		HideHelp: true,
-	}
-
-	index, result, err := prompt.Run()
-	if err != nil {
-		return "", err
-	}
-
-	if result == "Quit" {
-		return "quit", nil
-	}
-
-	if index == 0 {
-		return "create", nil
-	}
-
-	return result, nil
-}
-
-func (m *SSMManager) formatParameters(params []*ssm.Parameter) []string {
+func formatParameters(params []*ssm.Parameter) []string {
 	var formatted []string
 	for _, param := range params {
-		name := strings.TrimPrefix(*param.Name, m.prefix)
-		formatted = append(formatted, fmt.Sprintf("%s = %s", name, *param.Value))
+		name := strings.Split(*param.Name, "/")
+		formatted = append(formatted, fmt.Sprintf("%s = %s", name[len(name)-1], *param.Value))
 	}
 	return formatted
 }
 
-func (m *SSMManager) createNewParameter() error {
-	name, err := m.promptForInput("Enter new parameter name")
-	if err != nil {
-		return err
-	}
-
-	value, err := m.promptForInput("Enter parameter value")
-	if err != nil {
-		return err
-	}
-
-	paramType, err := m.promptForParamType()
-	if err != nil {
-		return err
-	}
-
-	fullName := m.prefix + name
-
-	err = m.updateParameterWithRetry(fullName, value, paramType)
-	if err != nil {
-		return fmt.Errorf("failed to create parameter: %w", err)
-	}
-
-	if !m.quiet {
-		fmt.Println("Parameter created successfully.")
-	}
-	return nil
+func updateParameter(svc *ssm.SSM, name, value, paramType string) error {
+	_, err := svc.PutParameter(&ssm.PutParameterInput{
+		Name:      aws.String(name),
+		Value:     aws.String(value),
+		Type:      aws.String(paramType),
+		Overwrite: aws.Bool(true),
+	})
+	return err
 }
 
-func (m *SSMManager) updateParameter(params []*ssm.Parameter, selection string) error {
-	paramName := strings.SplitN(selection, " = ", 2)[0]
-	fullName := m.prefix + paramName
-
-	var param *ssm.Parameter
-	for _, p := range params {
-		if *p.Name == fullName {
-			param = p
-			break
-		}
+func createNewParameter(svc *ssm.SSM, prefix string, quiet bool) error {
+	namePrompt := promptui.Prompt{
+		Label: "Enter new parameter name",
 	}
 
-	if param == nil {
-		return fmt.Errorf("parameter not found: %s", fullName)
-	}
-
-	if !m.quiet {
-		fmt.Printf("Updating parameter: %s\n", fullName)
-		fmt.Printf("Current value: %s\n", *param.Value)
-	}
-
-	newValue, err := m.promptForNewValue(*param.Value)
+	name, err := namePrompt.Run()
 	if err != nil {
-		return err
+		return fmt.Errorf("name prompt failed: %v", err)
 	}
 
-	if newValue == *param.Value {
-		if !m.quiet {
-			fmt.Println("No changes made.")
-		}
-		return nil
+	valuePrompt := promptui.Prompt{
+		Label: "Enter parameter value",
 	}
 
-	err = m.updateParameterWithRetry(fullName, newValue, *param.Type)
+	value, err := valuePrompt.Run()
 	if err != nil {
-		return fmt.Errorf("error updating parameter: %w", err)
+		return fmt.Errorf("value prompt failed: %v", err)
 	}
 
-	if !m.quiet {
-		fmt.Println("Parameter updated successfully.")
-	}
-
-	m.latestParam = &ssm.Parameter{
-		Name:  aws.String(fullName),
-		Value: aws.String(newValue),
-		Type:  param.Type,
-	}
-
-	return nil
-}
-
-func (m *SSMManager) promptForInput(label string) (string, error) {
-	prompt := promptui.Prompt{
-		Label: label,
-	}
-
-	return prompt.Run()
-}
-
-func (m *SSMManager) promptForParamType() (string, error) {
-	prompt := promptui.Select{
+	typePrompt := promptui.Select{
 		Label: "Select parameter type",
 		Items: []string{"String", "StringList", "SecureString"},
 	}
 
-	_, result, err := prompt.Run()
-	return result, err
-}
-
-func (m *SSMManager) promptForNewValue(currentValue string) (string, error) {
-	var prompt string
-	if m.quiet {
-		prompt = "New value: "
-	} else {
-		prompt = "Enter new value (or press Enter to cancel): "
+	_, paramType, err := typePrompt.Run()
+	if err != nil {
+		return fmt.Errorf("type prompt failed: %v", err)
 	}
 
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          prompt,
-		HistoryFile:     "/tmp/readline.tmp",
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
+	fullName := prefix + name
+
+	_, err = svc.PutParameter(&ssm.PutParameterInput{
+		Name:      aws.String(fullName),
+		Value:     aws.String(value),
+		Type:      aws.String(paramType),
+		Overwrite: aws.Bool(false),
 	})
+
 	if err != nil {
-		return "", err
-	}
-	defer rl.Close()
-
-	newValue, err := rl.ReadlineWithDefault(currentValue)
-	if err != nil {
-		if err == readline.ErrInterrupt {
-			return "", fmt.Errorf("update cancelled")
-		}
-		return "", err
+		return fmt.Errorf("failed to create parameter: %v", err)
 	}
 
-	return strings.TrimSpace(newValue), nil
-}
-
-func (m *SSMManager) updateParameterWithRetry(name, value, paramType string) error {
-	for i := 0; i < maxRetries; i++ {
-		_, err := m.svc.PutParameter(&ssm.PutParameterInput{
-			Name:      aws.String(name),
-			Value:     aws.String(value),
-			Type:      aws.String(paramType),
-			Overwrite: aws.Bool(true),
-		})
-		if err == nil {
-			return nil
-		}
-		time.Sleep(retryDelay)
+	if !quiet {
+		fmt.Println("Parameter created successfully.")
 	}
-	return fmt.Errorf("failed to update parameter after %d attempts", maxRetries)
+	return nil
 }

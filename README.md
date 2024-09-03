@@ -67,19 +67,7 @@ ssm-env [options]
    ```bash
    ssm-env -prefix /app/test/
    ```
-
-3. Run SSM Manager in quiet mode:
-   ```bash
-   ssm-env -quiet
-   ```
-
-4. Run SSM Manager with a specific prefix in quiet mode:
-   ```bash
-   ssm-env -prefix /app/test/ -quiet
-   ```
-
-In quiet mode, the tool provides a minimal interface with reduced output, making it suitable for scripting or when a cleaner display is preferred.
-
+   
 ## Local build
 
 You can also build the tool locally by cloning the repository and running the following commands:
